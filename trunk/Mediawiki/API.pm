@@ -70,11 +70,14 @@ sub new {
   $self->{'cmsort'} = 'sortkey';   # request this sort order from API
   $self->{'querylimit'} = 500;     # number of results to request per query
   $self->{'botlimit'} = 5000;      # number of results to request if bot
-  $self->{'decodeprint'} = 1;      # don't UTF-8 output
+  $self->{'decodePrint'} = 1;      # don't UTF-8 output
   $self->{'xmlretrydelay'} = 10;   # pause after XML level failure 
   $self->{'xmlretrylimit'} = 10;   # retries at XML level
+  $self->{'setbotflag'} = 1;       # if the bot flag isn't set, the edit won't show up as a bot edit
 
   $self->{'cacheEditToken'} = 0;   
+  $self->{'cacheDeleteToken'} = 0; 
+  $self->{'cacheProtectToken'} = 0;
 
   $self->{'logintries'} = 5;       # delay on login throttle
 
@@ -197,6 +200,18 @@ sub debug_level {
    $self->print(1,"A Set debug level to: $level");
  }
  return $self->{'debugLevel'};
+}
+
+######################################################
+
+sub decode_print {
+	my $self = shift;
+	my $dPrint = shift;
+	if(defined $dPrint){
+		$self->{'decodePrint'} = $dPrint;
+		$self->print(1,"A Set decodePrint to: $dPrint");
+	}
+	return $self->{'decodePrint'};
 }
 
 ######################################################
@@ -432,6 +447,12 @@ sub edit_page {
   }
 
   if ( $editToken eq '+\\' ) { die "Bad edit token!\n"; }
+  
+  # If the bot flag isn't set, the edit won't be recorded as a bot
+  # edit, so it won't be hidden even with hide-bots set.
+  if($self->{'setbotflag'} != 0){
+	push(@$params, 'bot'=>"1");
+  }
 
   my $query = 
       [ 'action' => 'edit',
@@ -441,7 +462,7 @@ sub edit_page {
 	'title' => $pageTitle,
 	'format' => 'xml',
        @$params  ];
-  
+
   my $res  = $self->makeXMLrequest($query);
 
   $self->print(5, 'R editing response: ' . Dumper($res));
@@ -485,6 +506,224 @@ sub edit_token {
 
   return $editToken;
 }
+
+######################################################
+
+=item $api->purge($pageTitles);
+
+Purge the cache of the pages given in the pageTitles
+
+Returns undef on success. 
+Returns the API.php result hash on error.
+
+=cut
+sub purge {
+  my $self = shift;
+  my $pageTitles = join("|", @_);
+
+  $self->print(1,"A Purging $pageTitles");
+
+  my $query = 
+      [ 'action' => 'purge',
+	'titles' => $pageTitles,
+	'format' => 'xml',
+	];
+
+  my $res  = $self->makeXMLrequest($query);
+
+  $self->print(5, 'R deletion response: ' . Dumper($res));
+
+  if ( exists($res->{'purge'}->{'page'}->{'purged'}) ) { 
+      return "";
+  } else {
+		print "Error trying to purge cache...\n";
+		print Dumper($res);
+		return $res;
+  }
+}
+
+######################################################
+
+=item $api->delete_page($pageTitle, $reason);
+
+Delete the page given by $pageTitle and provide the explanation
+that is given in $reason.
+
+Returns undef on success. 
+Returns the API.php result hash on error.
+
+=cut
+sub delete_page {
+  my $self = shift;
+  my $pageTitle = shift;
+  my $reason = shift;
+  my $params = shift || [];
+
+  $self->print(1,"A Deleting $pageTitle");
+
+  my $deleteToken;
+
+  if ( 1 == $self->{'cacheDeleteToken'} 
+         && defined $self->{'deleteToken'} ) { 
+    $deleteToken = $self->{'deleteToken'};
+    $self->print(5, "I using cached delete token: $deleteToken");  
+  } else { 
+    $deleteToken = $self->delete_token($pageTitle);
+  }
+
+  if ( $deleteToken eq '+\\' ) { die "Bad delete token!\n"; }
+
+  my $query = 
+      [ 'action' => 'delete',
+	'title' => $pageTitle,
+	'token' => $deleteToken,
+	'reason' => $reason,
+	'format' => 'xml',
+    @$params  ];
+
+  my $res  = $self->makeXMLrequest($query);
+
+  $self->print(5, 'R deletion response: ' . Dumper($res));
+
+  if ( $res->{'delete'}->{'result'} eq 'Success' ) { 
+      return "";
+  } else { 
+      return $res;
+  }
+}
+
+############################################################
+# internal function
+
+# Fetches the 'delete' token which needs to be passed back to the 
+# delete request in delete_page().
+sub delete_token {
+  my $self = shift;
+  my $pageTitle = shift;
+
+  my $xml  = $self->makeXMLrequest(
+                  [ 'action' => 'query', 
+                    'prop' => 'info',
+                    'titles' => $pageTitle,
+                    'intoken' => 'delete',
+                    'format' => 'xml']);
+
+  if ( ! defined $xml->{'query'}
+       || ! defined $xml->{'query'}->{'pages'}
+       || ! defined $xml->{'query'}->{'pages'}->{'page'} 
+       || ! defined $xml->{'query'}->{'pages'}->{'page'}->{'deletetoken'} ) { 
+     $self->handleXMLerror($xml);
+  }
+
+  my $deleteToken = $xml->{'query'}->{'pages'}->{'page'}->{'deletetoken'};
+  $self->print(5, "R delete token: ... $deleteToken ...");
+
+  if ( 1 == $self->{'cacheDeleteToken'} ) { 
+    $self->{'deleteToken'} = $deleteToken;
+    $self->print(5, "I caching delete token");  
+  }
+
+  return $deleteToken;
+}
+
+
+######################################################
+
+=item $api->protect_page($pageTitle, $reason);
+
+Protect the page given by $pageTitle and provide the explanation
+that is given in $reason.
+
+For now, this just protects edits to only be do-able for sysops and
+with no expiration.  This should be kept backward compatible if
+there is a good way to parameterize this to protect other things
+(such as move or create and with varying expirations and user
+groups).
+
+Cascading protection is NOT on (and there is currently no parameter
+for it in this subroutine).
+
+Returns undef on success. 
+Returns the API.php result hash on error.
+
+=cut
+sub protect_page {
+  my $self = shift;
+  my $pageTitle = shift;
+  my $reason = shift;
+  my $params = shift || [];
+
+  $self->print(1,"A Protecting $pageTitle");
+
+  my $protectToken;
+
+  if ( 1 == $self->{'cacheProtectToken'} 
+         && defined $self->{'protectToken'} ) { 
+    $protectToken = $self->{'protectToken'};
+    $self->print(5, "I using cached protect token: $protectToken");
+  } else { 
+    $protectToken = $self->protect_token($pageTitle);
+  }
+
+  if ( $protectToken eq '+\\' ) { die "Bad protect token!\n"; }
+
+  my $query = 
+      [ 'action' => 'protect',
+	'title' => $pageTitle,
+	'token' => $protectToken,
+	'protections' => 'edit=sysop',
+	'reason' => $reason,
+	'format' => 'xml',
+    @$params  ];
+
+  my $res  = $self->makeXMLrequest($query);
+
+  $self->print(5, 'R protection response: ' . Dumper($res));
+
+  if ( $res->{'protect'}->{'result'} eq 'Success' ) { 
+      return "";
+  } else { 
+      return $res;
+  }
+}
+
+############################################################
+# internal function
+
+# Fetches the 'protect' token which needs to be passed back to the 
+# protect request in protect_page().
+sub protect_token {
+  my $self = shift;
+  my $pageTitle = shift;
+
+  my $xml  = $self->makeXMLrequest(
+                  [ 'action' => 'query', 
+                    'prop' => 'info',
+                    'titles' => $pageTitle,
+                    'intoken' => 'protect',
+                    'format' => 'xml']);
+
+  if ( ! defined $xml->{'query'}
+       || ! defined $xml->{'query'}->{'pages'}
+       || ! defined $xml->{'query'}->{'pages'}->{'page'} 
+       || ! defined $xml->{'query'}->{'pages'}->{'page'}->{'protecttoken'} ) { 
+     $self->handleXMLerror($xml);
+  }
+
+  my $protectToken = $xml->{'query'}->{'pages'}->{'page'}->{'protecttoken'};
+  $self->print(5, "R protect token: ... $protectToken ...");
+
+  if ( 1 == $self->{'cacheProtectToken'} ) { 
+    $self->{'protectToken'} = $protectToken;
+    $self->print(5, "I caching protect token");  
+  }
+
+  return $protectToken;
+}
+
+
+
+
 
 ############################################################
 # 
@@ -632,7 +871,7 @@ sub pages_in_category_detailed {
   return $results;
 }
 
-#############################################################3
+#############################################################
 
 =item $list = $api->where_embedded($templateName);
 
@@ -668,7 +907,64 @@ sub where_embedded {
   return $results;
 }
 
-#############################################################3
+#############################################################
+
+=item $list = $api->templates_on_page($pageTitle);
+
+Gets a list of all pages included in the provided page.
+This module can be used as a generator.
+
+Returns an array of the titles of the templates included
+on the page.
+NOTE: It seems other functions return references to arrays. Any
+specific reason?  Regardless, this should match that format for
+uniformity.  But notice then next TODO... instead of re-writing
+this subroutine for that, just finish making this work for
+multiple titles.
+
+TODO: Make a version of this subroutine which takes multiple
+pages at once (since the API can do that) and returns a more
+complex structure for the resutls.
+
+=cut
+
+sub templates_on_page { 
+	my $self = shift;
+	my $pageTitle = shift;
+
+	$self->print(1,"A Fetching list of templates transcluded on $pageTitle");
+ 
+	my %queryParameters =  ( 'action' => 'query', 
+							 'prop' => 'templates', 
+							 'titles' => $pageTitle,
+							 'format' => 'xml' );
+
+	if ( $self->is_bot) {
+		$queryParameters{'eilimit'} = $self->{'botlimit'};
+	}
+	
+	my $results = $self->makeXMLrequest([%queryParameters]);
+
+	my @arr = ();
+	$results = $self->child_data($results, ['query', 'pages', 'page']);
+	if(exists($results->{'templates'})){ # 'leaf-node' pages won't include any templates
+		my $data = $self->child_data($results, ['templates', 'tl']);
+
+		# If there is only one result, this just returns a hash.  Wrap it in an array.
+		if(ref($data) ne 'ARRAY'){
+			$data = [$data];
+		}
+
+		my $result;
+		foreach $result (@$data) {
+			push(@arr, $result->{'title'});
+		}
+	}
+
+	return @arr;
+} # end templates_on_page
+
+#############################################################
 
 =item $list = $api->log_events($pageName, $params);
 
@@ -755,7 +1051,7 @@ Fetch the content (wikitext) of a page or pages.  $pageTitles
 can be either a scalar, in which case it is the title of the page 
 to be fetched, or a reference to a list of page titles. If a single
 title is passed, the text is returned. If an array reference is passed, 
-a hash reference is returned.  
+a hash reference is returned.
 
 =cut
 
@@ -795,7 +1091,8 @@ sub content {
 
   return $arr;
 }
- 
+
+
 #########################################################
 
 ## Internal function
@@ -816,7 +1113,7 @@ sub content_single {
     = $self->makeXMLrequest([%queryParameters]);
 
   return $self->child_data_if_defined($results, 
-                       ['query', 'pages', 'page', 'revisions', 'rev','content'], '');
+                       ['query', 'pages', 'page', 'revisions', 'rev', 'content'], '');
 }
 #########################################################
 
@@ -1416,7 +1713,7 @@ sub print {
   my $limit = shift;
   my $message = shift;
 
-  if ( $self->{'decodeprint'} == 1) {
+  if ( $self->{'decodePrint'} == 1) {
     $message = decode("utf8", $message);
   }
 
@@ -1571,9 +1868,12 @@ sub undo_htmlspecialchars  {
 
 =head1 Copryright
 
-Copyright 2008 by Carl Beckhorn. 
+Copyright 2008-2010 by Carl Beckhorn, Sean Colombo.
 
 Released under GNU Public License (GPL) 2.0.
+	  
+TODO:
+	- It appears that this framework does not follow 301-redirects yet.  Add that.
 
 =cut
 
