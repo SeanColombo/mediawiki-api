@@ -1,0 +1,1 @@
+Please see wikia for the wiki: http://perlmediawikiapi.wikia.com/wiki/Perl_MediaWiki_API_Wiki
