@@ -33,7 +33,7 @@ oriented interface. Attempts be less stupid about errors.
 
 =cut
 
-#############################################################3
+#############################################################
 
 =head1 Methods
 
@@ -397,7 +397,7 @@ sub login_from_file {
 
 }
 
-#############################################################3
+##############################################################
 
 # Internal function
 
@@ -406,7 +406,7 @@ sub cookie_jar {
   return $self->{'agent'}->cookie_jar();
 }
 
-#############################################################3
+##############################################################
 
 
 =head2 Edit pages
@@ -783,7 +783,7 @@ sub fetch_backlinks_compat {
   return \@articles;
 }
 
-#############################################################3
+##############################################################
 
 =item $pages = $api->backlinks($pageTitle);
 
@@ -1258,7 +1258,7 @@ sub add_maxlag_param {
   }
 }
 
-#############################################################3
+##############################################################
 
 =item $contribs = $api->user_contribs($userName);
 
@@ -1312,7 +1312,7 @@ sub user_contribs {
   return \@results;
 }
 
-######################3
+#######################
 
 =item $api->parse( $wikitext ) 
 
@@ -1332,7 +1332,7 @@ sub parse {
 }                                  
 
 
-#############################################################3
+##############################################################
 
 =back
 
@@ -1390,7 +1390,7 @@ sub watchlist {
    return $self->child_data($xml, ['query','watchlist','item']);
 }
 
-#############################################################3
+##############################################################
 
 =item $properties = $api->user_properties();
 
@@ -1480,7 +1480,61 @@ sub user_is_bot {
   return 0;
 }
 
-#############################################################3
+##############################################################
+
+=item $api->items_on_special($specialPageName,[ , $limit[, $offset]])
+
+NOTE: THIS IS NOT YET SUPPORTED BY THE API - EXTENSIONS AND SKINS ON
+THE WIKI MAY AFFECT WHETHER THIS SUBROUTINE WORKS.
+
+Returns a list of pages that were listed in a standard special page
+list.
+
+=cut
+
+sub items_on_special{
+	my $self = shift;
+	my $pageName = shift;
+	my $limit = $self->{'querylimit'};
+	my $offset = 0;
+	my @pagesFound = ();
+	if(@_){
+		$limit = shift;
+	}
+	if(@_){
+		$offset = shift;
+	}
+	
+	my %queryParameters =  (
+		'title' => $pageName,
+		'limit' => $limit,
+		'offset' => $offset,
+	);
+	
+	# Since this is a regular page and not an api request, temporarily change the base_url.
+	my $origBaseUrl = $self->base_url();
+	my $indexBaseUrl = $origBaseUrl;
+	$indexBaseUrl =~ s/api\.php/index\.php/i;
+	$self->base_url($indexBaseUrl);
+	my $content = $self->makeHTTPrequest([ %queryParameters ]);
+	$self->base_url($origBaseUrl);
+
+	if($content =~ /<[ou]l[^>]*>(.*?)<\/[ou]l>/is){
+		$content = $1;
+		while($content =~ /<li[^>]*><a[^>]*>(.*?)<\/a><\/li>/is){
+			$content = $`.$';
+			my $pageFound = $1;
+			$pageFound = htmlspecialchars_decode($pageFound);
+			push(@pagesFound, $pageFound);
+		}
+	} else {
+		$self->print(1, "E ERROR: Could not find list on special page $pageName\"!");
+	}
+
+	return \@pagesFound;
+} # end items_on_special
+
+##############################################################
 
 =back 
 
@@ -1600,7 +1654,7 @@ sub makeHTTPrequest {
   while (1) { 
     $self->{'requestCount'}++;
 
-    if ( $retryCount == 0) { 
+    if ( $retryCount == 0) {
       $self->print(2, "A  Making HTTP request (" . $self->{'requestCount'} . ")");
       $self->print(5, "I  Base URL: " . $self->{'baseurl'});
       my $k = 0;
@@ -1634,8 +1688,8 @@ sub makeHTTPrequest {
 
     sleep $delay;
     $delay = $delay * 2;
-     
-    if ( $retryCount > $self->{'maxRetryCount'}) { 
+
+    if ( $retryCount > $self->{'maxRetryCount'}) {
       my $errorString = 
            "Exceeded maximum number of tries for a single request.\n";
       $errorString .= 
@@ -1737,7 +1791,7 @@ sub dump {
 }
 
 
-#############################################################3
+##############################################################
 
 # Internal function
 
@@ -1756,7 +1810,7 @@ sub handleXMLerror {
 
   die "$error\n";
 }
-######################################3
+#######################################
 
 ### Recursively decode entities from the XML data structure
 
@@ -1812,7 +1866,7 @@ sub is_bot {
 }
 
 
-#############################################################3
+##############################################################
 # Internal function
 
 sub parse_xml {
@@ -1861,7 +1915,126 @@ sub undo_htmlspecialchars  {
   return $text;
 }
 
-###############################3
+# This seems a bit imperfect.  Is there a better way to do this?
+if(!defined('htmlspecialchars_decode')){
+	####
+	# Reverses PHP's htmlspecialchars().  This is not the same as
+	# PHP's htmlspecialchars_decode because it does not have a second
+	# parameter for the type of decode to do... this undoes ALL special
+	# char encoding.
+	####
+	sub htmlspecialchars_decode{
+		my $retVal = shift;
+		$retVal =~ s/&amp;/&/ig;
+		$retVal =~ s/&apos;/'/ig;
+		$retVal =~ s/&lt;/</ig;
+		$retVal =~ s/&gt;/>/ig;
+		$retVal =~ s/&quot;/"/ig;
+		$retVal =~ s/&#039;/'/ig;
+
+		# This is from a list of latin1 encodings.
+		$retVal =~ s/&nbsp;|&#160;/ /g;
+		$retVal =~ s/&iexcl;|&#161;/¡/g;
+		$retVal =~ s/&cent;|&#162;/¢/g;
+		$retVal =~ s/&pound;|&#163;/£/g;
+		$retVal =~ s/&curren;|&#164;/¤/g;
+		$retVal =~ s/&yen;|&#165;/¥/g;
+		$retVal =~ s/&brvbar;|&#166;/¦/g;
+		$retVal =~ s/&sect;|&#167;/§/g;
+		$retVal =~ s/&uml;|&#168;/¨/g;
+		$retVal =~ s/&copy;|&#169;/©/g;
+		$retVal =~ s/&ordf;|&#170;/ª/g;
+		$retVal =~ s/&laquo;|&#171;/«/g;
+		$retVal =~ s/&not;|&#172;/¬/g;
+		$retVal =~ s/&shy;|&#173;/­/g;
+		$retVal =~ s/&reg;|&#174;/®/g;
+		$retVal =~ s/&macr;|&#175;/¯/g;
+		$retVal =~ s/&deg;|&#176;/°/g;
+		$retVal =~ s/&plusmn;|&#177;/±/g;
+		$retVal =~ s/&sup2;|&#178;/²/g;
+		$retVal =~ s/&sup3;|&#179;/³/g;
+		$retVal =~ s/&acute;|&#180;/´/g;
+		$retVal =~ s/&micro;|&#181;/µ/g;
+		$retVal =~ s/&para;|&#182;/¶/g;
+		$retVal =~ s/&middot;|&#183;/·/g;
+		$retVal =~ s/&cedil;|&#184;/¸/g;
+		$retVal =~ s/&sup1;|&#185;/¹/g;
+		$retVal =~ s/&ordm;|&#186;/º/g;
+		$retVal =~ s/&raquo;|&#187;/»/g;
+		$retVal =~ s/&frac14;|&#188;/¼/g;
+		$retVal =~ s/&frac12;|&#189;/½/g;
+		$retVal =~ s/&frac34;|&#190;/¾/g;
+		$retVal =~ s/&iquest;|&#191;/¿/g;
+		$retVal =~ s/&Agrave;|&#192;/À/g;
+		$retVal =~ s/&Aacute;|&#193;/Á/g;
+		$retVal =~ s/&Acirc;|&#194;/Â/g;
+		$retVal =~ s/&Atilde;|&#195;/Ã/g;
+		$retVal =~ s/&Auml;|&#196;/Ä/g;
+		$retVal =~ s/&Aring;|&#197;/Å/g;
+		$retVal =~ s/&AElig;|&#198;/Æ/g;
+		$retVal =~ s/&Ccedil;|&#199;/Ç/g;
+		$retVal =~ s/&Egrave;|&#200;/È/g;
+		$retVal =~ s/&Eacute;|&#201;/É/g;
+		$retVal =~ s/&Ecirc;|&#202;/Ê/g;
+		$retVal =~ s/&Euml;|&#203;/Ë/g;
+		$retVal =~ s/&Igrave;|&#204;/Ì/g;
+		$retVal =~ s/&Iacute;|&#205;/Í/g;
+		$retVal =~ s/&Icirc;|&#206;/Î/g;
+		$retVal =~ s/&Iuml;|&#207;/Ï/g;
+		$retVal =~ s/&ETH;|&#208;/Ð/g;
+		$retVal =~ s/&Ntilde;|&#209;/Ñ/g;
+		$retVal =~ s/&Ograve;|&#210;/Ò/g;
+		$retVal =~ s/&Oacute;|&#211;/Ó/g;
+		$retVal =~ s/&Ocirc;|&#212;/Ô/g;
+		$retVal =~ s/&Otilde;|&#213;/Õ/g;
+		$retVal =~ s/&Ouml;|&#214;/Ö/g;
+		$retVal =~ s/&times;|&#215;/×/g;
+		$retVal =~ s/&Oslash;|&#216;/Ø/g;
+		$retVal =~ s/&Ugrave;|&#217;/Ù/g;
+		$retVal =~ s/&Uacute;|&#218;/Ú/g;
+		$retVal =~ s/&Ucirc;|&#219;/Û/g;
+		$retVal =~ s/&Uuml;|&#220;/Ü/g;
+		$retVal =~ s/&Yacute;|&#221;/Ý/g;
+		$retVal =~ s/&THORN;|&#222;/Þ/g;
+		$retVal =~ s/&szlig;|&#223;/ß/g;
+		$retVal =~ s/&agrave;|&#224;/à/g;
+		$retVal =~ s/&aacute;|&#225;/á/g;
+		$retVal =~ s/&acirc;|&#226;/â/g;
+		$retVal =~ s/&atilde;|&#227;/ã/g;
+		$retVal =~ s/&auml;|&#228;/ä/g;
+		$retVal =~ s/&aring;|&#229;/å/g;
+		$retVal =~ s/&aelig;|&#230;/æ/g;
+		$retVal =~ s/&ccedil;|&#231;/ç/g;
+		$retVal =~ s/&egrave;|&#232;/è/g;
+		$retVal =~ s/&eacute;|&#233;/é/g;
+		$retVal =~ s/&ecirc;|&#234;/ê/g;
+		$retVal =~ s/&euml;|&#235;/ë/g;
+		$retVal =~ s/&igrave;|&#236;/ì/g;
+		$retVal =~ s/&iacute;|&#237;/í/g;
+		$retVal =~ s/&icirc;|&#238;/î/g;
+		$retVal =~ s/&iuml;|&#239;/ï/g;
+		$retVal =~ s/&eth;|&#240;/ð/g;
+		$retVal =~ s/&ntilde;|&#241;/ñ/g;
+		$retVal =~ s/&ograve;|&#242;/ò/g;
+		$retVal =~ s/&oacute;|&#243;/ó/g;
+		$retVal =~ s/&ocirc;|&#244;/ô/g;
+		$retVal =~ s/&otilde;|&#245;/õ/g;
+		$retVal =~ s/&ouml;|&#246;/ö/g;
+		$retVal =~ s/&divide;|&#247;/÷/g;
+		$retVal =~ s/&oslash;|&#248;/ø/g;
+		$retVal =~ s/&ugrave;|&#249;/ù/g;
+		$retVal =~ s/&uacute;|&#250;/ú/g;
+		$retVal =~ s/&ucirc;|&#251;/û/g;
+		$retVal =~ s/&uuml;|&#252;/ü/g;
+		$retVal =~ s/&yacute;|&#253;/ý/g;
+		$retVal =~ s/&thorn;|&#254;/þ/g;
+		$retVal =~ s/&yuml;|&#255;/ÿ/g;
+
+		return $retVal;
+	} # end htmlspecialchars_decode()
+}
+
+################################
 # Close POD
 
 =back
