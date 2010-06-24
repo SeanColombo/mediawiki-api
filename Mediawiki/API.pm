@@ -1880,15 +1880,17 @@ sub parse_xml {
   my $t = decode("utf8", $_[0]);
   $_[0] = encode("UTF-8", $t);  # this is secret code for strict UTF-8
 
-  eval { 
-   $xml = XML::Simple::parse_string(@_);
-  };
+	my $xmlString = $_[0];
+	eval {
+		$xmlString =~ s/(^\s+|\s+$)//g;
+		$xml = XML::Simple::parse_string($xmlString);
+	};
   if ( $@ ) { 
     print "XML PARSING ERROR 1\n";
 #    print "Code: $! \n";
 # not well-formed (invalid token)
-    print Dumper(@_);
-    die;
+    print Dumper($xmlString);
+	die;
   }
 
   if ( $self->debug_xml() > 0) { 
