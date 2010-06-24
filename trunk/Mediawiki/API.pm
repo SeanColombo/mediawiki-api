@@ -1519,9 +1519,9 @@ sub items_on_special{
 	my $content = $self->makeHTTPrequest([ %queryParameters ]);
 	$self->base_url($origBaseUrl);
 
-	if($content =~ /<[ou]l[^>]*>(.*?)<\/[ou]l>/is){
+	if($content =~ /<h1.*?<[ou]l[^>]*>(.*?)<\/[ou]l>/is){ # get the first list after the heading (anything before is likely to be the skin)
 		$content = $1;
-		while($content =~ /<li[^>]*><a[^>]*>(.*?)<\/a><\/li>/is){
+		while($content =~ /<li[^>]*><a[^>]*>(.*?)<\/a>.*?<\/li>/is){
 			$content = $`.$';
 			my $pageFound = $1;
 			$pageFound = htmlspecialchars_decode($pageFound);
