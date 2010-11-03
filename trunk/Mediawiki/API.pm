@@ -1519,7 +1519,12 @@ sub items_on_special{
 	my $content = $self->makeHTTPrequest([ %queryParameters ]);
 	$self->base_url($origBaseUrl);
 
-	if($content =~ /<h1.*?<[ou]l[^>]*>(.*?)<\/[ou]l>/is){ # get the first list after the heading (anything before is likely to be the skin)
+	# If using HTML5, we only want the content inside of <article>
+	if($content =~ /<article[ >](.*)<\/article>/is){
+		$content = $1;
+	}
+
+	if($content =~ /^.*<h1.*?<[ou]l[^>]*>(.*?)<\/[ou]l>/is){ # get the first list after the last h1 heading (anything before is likely to be the skin)
 		$content = $1;
 		while($content =~ /<li[^>]*><a[^>]*>(.*?)<\/a>.*?<\/li>/is){
 			$content = $`.$';
