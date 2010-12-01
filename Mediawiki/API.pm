@@ -631,14 +631,18 @@ sub delete_token {
 
 =item $api->protect_page($pageTitle, $reason);
 
+=item $api->protect_page($pageTitle, $reason, ['protections' => 'edit=autoconfirmed|move=sysop']);
+
 Protect the page given by $pageTitle and provide the explanation
 that is given in $reason.
 
-For now, this just protects edits to only be do-able for sysops and
-with no expiration.  This should be kept backward compatible if
-there is a good way to parameterize this to protect other things
-(such as move or create and with varying expirations and user
-groups).
+This default to protects edits and moves to only be do-able for
+sysops and with no expiration.  This should be kept backward compatible.
+
+Pass in additional or different parameters to change the protections.
+For example:
+$api->protect_page($pageTitle, $reason, ['protections' => 'edit=autoconfirmed|move=sysop']);
+would let autoconfirmed users edit the page, but only allow sysops to move the page.
 
 Cascading protection is NOT on (and there is currently no parameter
 for it in this subroutine).
@@ -667,11 +671,16 @@ sub protect_page {
 
   if ( $protectToken eq '+\\' ) { die "Bad protect token!\n"; }
 
+	# If protections weren't specified, add a default (edits and moves for sysops only).
+	if(! (grep $_ eq "protections", @{$params})){
+		push(@{$params}, "protections");
+		push(@{$params}, "edit=sysop|move=sysop");
+	}
+
   my $query = 
       [ 'action' => 'protect',
 	'title' => $pageTitle,
 	'token' => $protectToken,
-	'protections' => 'edit=sysop',
 	'reason' => $reason,
 	'format' => 'xml',
     @$params  ];
@@ -686,6 +695,28 @@ sub protect_page {
       return $res;
   }
 }
+
+############################################################
+
+=item $api->unprotect_page($pageTitle, $reason);
+
+Basically just an alias to protect-page but which defaults to no protections.
+
+=cut
+sub unprotect_page {
+  my $self = shift;
+  my $pageTitle = shift;
+  my $reason = shift;
+  my $params = shift || [];
+
+  # If protections weren't specified, set the default of no protection.
+  if(! (grep $_ eq "protections", @{$params})){ # like in_array()
+    push(@{$params}, "protections");
+    push(@{$params}, "edit=all|move=all");
+  }
+  
+  return $self->protect_page($pageTitle, $reason, $params);
+} # end unprotect_page()
 
 ############################################################
 # internal function
@@ -1167,17 +1198,19 @@ sub revisions {
   }
 
   my $what = "ids|flags|timestamp|size|comment|user";
- 
-  my $data = $self->makeXMLrequest([ 'format' => 'xml',
+
+  my $xml = $self->makeXMLrequest([ 'format' => 'xml',
                                        'action' => 'query',
                                        'prop' => 'revisions',
                                        'rvprop' => $what,
                                        'rvlimit' => $count,
                                        'titles' => encode("utf8", $title)  ], 
                                      [ 'page', 'rev' ]);
+  my $t = $self->child_data_if_defined($xml, ['query','pages','page']);
 
-  my $t = $self->child_data_if_defined($data, ['query','pages','page']);
-  return $self->child_data_if_defined(${$t}[0], ['revisions', 'rev']);
+  # TODO: This line failed... REMOVE AFTER MORE TESTING.
+  #return $self->child_data_if_defined(${$t}[0], ['revisions', 'rev']);
+  return $self->child_data_if_defined($t, ['revisions', 'rev']);
 }
 
 
@@ -1492,7 +1525,7 @@ list.
 
 =cut
 
-sub items_on_special{
+sub items_on_special {
 	my $self = shift;
 	my $pageName = shift;
 	my $limit = $self->{'querylimit'};
@@ -1628,8 +1661,8 @@ sub makeXMLrequest {
   }
 
 #  return decode_recursive($xml);
-return $xml;
-}
+	return $xml;
+} # end makeXMLrequest
 
 ######################################
 
@@ -1746,6 +1779,12 @@ sub child_data {
   return $p;
 }
 
+####
+# Given a hash reference with nested data, follows the path provided
+# in the second parameter to get the final value. If at any point the
+# path is not defined as expected, then the default value (third parameter)
+# is returned.
+####
 sub child_data_if_defined { 
   my $self = shift;
   my $p = shift;
@@ -2054,6 +2093,7 @@ Released under GNU Public License (GPL) 2.0.
 	  
 TODO:
 	- It appears that this framework does not follow 301-redirects yet.  Add that.
+	- Add a subroutine for rolling back a page.
 
 =cut
 
