@@ -738,7 +738,7 @@ sub protect_token {
        || ! defined $xml->{'query'}->{'pages'}
        || ! defined $xml->{'query'}->{'pages'}->{'page'} 
        || ! defined $xml->{'query'}->{'pages'}->{'page'}->{'protecttoken'} ) { 
-     $self->handleXMLerror($xml);
+     $self->handleXMLerror($xml, "Couldn't find protecttoken.");
   }
 
   my $protectToken = $xml->{'query'}->{'pages'}->{'page'}->{'protecttoken'};
@@ -1242,6 +1242,91 @@ sub page_info {
 
   return $self->child_data($results,  ['query', 'pages', 'page']);
 }
+
+################################################################
+
+=item $api->rollback_page($pageTitle);
+
+=item $api->rollback_page( $pageTitle, ["summary" => "Bot detected that this page was vandalism."] );
+
+http://www.mediawiki.org/wiki/API:Rollback
+
+Rolling back a page means undoing the last series of edits by
+one user. In other words, rollback keeps undoing revision after
+revision until it encounters one made by someone different.
+
+Optional parameters include summary and 'markbot' flag.
+
+=cut
+sub rollback_page {
+	my $self = shift;
+	my $pageTitle = shift;
+	my $params = shift || [];
+
+	$self->print(1,"A Rolling back $pageTitle");
+
+	my $rollbackToken;
+	my $lastEditor;
+
+	# NOTE: Rollback token cannot be cached. It depends on the page-title, the
+	# specific login session, and the user to rollback.
+    ($rollbackToken, $lastEditor) = $self->rollback_tokenAndEditor($pageTitle);
+
+	if ( $rollbackToken eq '+\\' ) { die "Bad rollback token!\n"; }
+
+	my $query = 
+			[ 'action' => 'rollback',
+			'title' => $pageTitle,
+			'token' => $rollbackToken,
+			'user' => $lastEditor,
+			'format' => 'xml',
+			@$params  ];
+
+	my $res  = $self->makeXMLrequest($query);
+
+	$self->print(5, 'R rollback response: ' . Dumper($res));
+
+	if ( $res->{'rollback'}->{'revid'} ne '' ) {
+		return "";
+	} else {
+		return $res;
+	}
+} # end rollback_page()
+
+############################################################
+# internal function
+
+# Fetches the 'rollback' token which needs to be passed back to the 
+# rollback request in rollback_page().
+# Can't cache roll
+sub rollback_tokenAndEditor {
+  my $self = shift;
+  my $pageTitle = shift;
+
+  my $xml  = $self->makeXMLrequest(
+                  [ 'action' => 'query', 
+                    'prop' => 'revisions',
+                    'titles' => $pageTitle,
+                    'rvtoken' => 'rollback',
+                    'format' => 'xml']);
+
+  if ( ! defined $xml->{'query'}
+       || ! defined $xml->{'query'}->{'pages'}
+       || ! defined $xml->{'query'}->{'pages'}->{'page'} 
+	   || ! defined $xml->{'query'}->{'pages'}->{'page'}->{'revisions'}
+	   || ! defined $xml->{'query'}->{'pages'}->{'page'}->{'revisions'}->{'rev'}
+	   || ! defined $xml->{'query'}->{'pages'}->{'page'}->{'revisions'}->{'rev'}->{'rollbacktoken'}
+	   || ! defined $xml->{'query'}->{'pages'}->{'page'}->{'revisions'}->{'rev'}->{'user'}) { 
+     $self->handleXMLerror($xml, "Couldn't find rollbacktoken and/or user.");
+  }
+
+  my $rollbackToken = $xml->{'query'}->{'pages'}->{'page'}->{'revisions'}->{'rev'}->{'rollbacktoken'};
+  my $lastEditor = $xml->{'query'}->{'pages'}->{'page'}->{'revisions'}->{'rev'}->{'user'};
+  $self->print(5, "R rollback token: ... $rollbackToken ...");
+  $self->print(5, "R last editor: ... $lastEditor ...");
+
+  return ($rollbackToken, $lastEditor);
+} # end rollback_tokenAndEditor()
 
 #######################################################
 
@@ -2093,7 +2178,6 @@ Released under GNU Public License (GPL) 2.0.
 	  
 TODO:
 	- It appears that this framework does not follow 301-redirects yet.  Add that.
-	- Add a subroutine for rolling back a page.
 
 =cut
 
