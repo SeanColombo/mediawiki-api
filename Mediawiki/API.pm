@@ -657,7 +657,7 @@ sub protect_page {
   my $reason = shift;
   my $params = shift || [];
 
-  $self->print(1,"A Protecting $pageTitle");
+  $self->print(1,"A (Un?)protecting $pageTitle");
 
   my $protectToken;
 
