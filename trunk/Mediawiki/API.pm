@@ -80,6 +80,8 @@ sub new {
   $self->{'cacheProtectToken'} = 0;
 
   $self->{'logintries'} = 5;       # delay on login throttle
+  
+  $self->{'dieOnError'} = 1;       # if this is 0, makeXmlRequest will just return instead of 'die'ing the whole script.
 
   bless($self);
   return $self;
@@ -650,6 +652,9 @@ for it in this subroutine).
 Returns undef on success. 
 Returns the API.php result hash on error.
 
+NOTE: If this returns "missingtitle-createonly", that means that you tried to protect/unprotect
+a page that doesn't exist yet.  The only protection allowed in that case is "create".
+
 =cut
 sub protect_page {
   my $self = shift;
@@ -691,7 +696,7 @@ sub protect_page {
 
   if ( $res->{'protect'}->{'result'} eq 'Success' ) { 
       return "";
-  } else { 
+  } else {
       return $res;
   }
 }
@@ -1690,9 +1695,12 @@ sub makeXMLrequest {
   while (1) { 
     $retryCount++;
     if ( $retryCount > $self->{'xmlretrylimit'} ) {
-      die "Aborting: too many retries in getXMLrequest\n";
+		if($self->{'dieOnError'} != 0){
+			die "Aborting: too many retries in getXMLrequest\n";
+		} else {
+			return $xml;
+		}
     }
-   
 
     $res = $self->makeHTTPrequest($args);
   
