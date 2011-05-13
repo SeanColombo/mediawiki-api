@@ -1,5 +1,7 @@
 # Mediawiki::API
 # A Perl library to access the Mediawiki API
+#
+# TODO: Go through and wrap (probably) all of the 'die's in a check for dieOnError
 
 package Mediawiki::API;
 
@@ -448,7 +450,8 @@ sub edit_page {
     $editToken = $self->edit_token($pageTitle);
   }
 
-  if ( $editToken eq '+\\' ) { die "Bad edit token!\n"; }
+  # Now, the editToken might be equal to this (eg: when creating a page).
+  #if ( $editToken eq '+\\' ) { die "Bad edit token!\n"; }
   
   # If the bot flag isn't set, the edit won't be recorded as a bot
   # edit, so it won't be hidden even with hide-bots set.
