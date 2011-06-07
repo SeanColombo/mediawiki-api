@@ -13,6 +13,7 @@ use XML::Simple;
 use POSIX qw(strftime);
 use HTML::Entities;
 use Encode;
+use URI::Escape;
 
 ##########################################################
 ## Enable a native code XML parser - makes a huge difference
@@ -1635,36 +1636,56 @@ sub items_on_special {
 	if(@_){
 		$offset = shift;
 	}
+	my $numFound = 0;
 	
 	my %queryParameters =  (
 		'title' => $pageName,
 		'limit' => $limit,
 		'offset' => $offset,
 	);
-	
+
 	# Since this is a regular page and not an api request, temporarily change the base_url.
 	my $origBaseUrl = $self->base_url();
 	my $indexBaseUrl = $origBaseUrl;
 	$indexBaseUrl =~ s/api\.php/index\.php/i;
-	$self->base_url($indexBaseUrl);
-	my $content = $self->makeHTTPrequest([ %queryParameters ]);
-	$self->base_url($origBaseUrl);
+	my $domain = $origBaseUrl;
+	$domain =~ s/^(https?:\/\/.*?)\/.*$/$1/i; # get just the domain because pagination is relative to that
+	my $content = $self->makeUrlRequest($indexBaseUrl, [ %queryParameters ]);
+	while($content ne ""){
+		my $fullPage = $content; # because 'content' will be chopped up a bit
 
-	# If using HTML5, we only want the content inside of <article>
-	if($content =~ /<article[ >](.*)<\/article>/is){
-		$content = $1;
-	}
-
-	if($content =~ /^.*<h1.*?<[ou]l[^>]*>(.*?)<\/[ou]l>/is){ # get the first list after the last h1 heading (anything before is likely to be the skin)
-		$content = $1;
-		while($content =~ /<li[^>]*><a[^>]*>(.*?)<\/a>.*?<\/li>/is){
-			$content = $`.$';
-			my $pageFound = $1;
-			$pageFound = htmlspecialchars_decode($pageFound);
-			push(@pagesFound, $pageFound);
+		# If using HTML5, we only want the content inside of <article>
+		if($content =~ /<article[ >](.*)<\/article>/is){
+			$content = $1;
 		}
-	} else {
-		$self->print(1, "E ERROR: Could not find list on special page $pageName\"!");
+
+		if($content =~ /^.*<h1.*?<[ou]l[^>]*>(.*?)<\/[ou]l>/is){ # get the first list after the last h1 heading (anything before is likely to be the skin)
+			$content = $1;
+			while($content =~ /<li[^>]*><a[^>]*>(.*?)<\/a>.*?<\/li>/is){
+				$content = $`.$';
+				my $pageFound = $1;
+				$pageFound = htmlspecialchars_decode($pageFound);
+
+				# Due to the way pagination works, sometimes there will be more available on the page than the are needed to hit the limit.
+				if($numFound < $limit){
+					push(@pagesFound, $pageFound);
+					$numFound++;
+				}
+			}
+
+			# This iteration is done.  If there is any other content, it will have to be re-filled from the next page.
+			$content = "";
+
+			# Follow pagination.
+			if($fullPage =~ /<a [^>]*href="([^"]*?)"[^>]*mw-nextlink[^>]*>next [0-9,]+<\/a>/is){
+				my $nextPageUrl = $domain.uri_unescape($1);
+				$nextPageUrl =~ s/&amp;/&/ig;
+				$content = $self->makeUrlRequest($nextPageUrl, []);
+			}
+		} else {
+			$self->print(1, "E ERROR: Could not find list on special page $pageName\"!");
+			$content = ""; # stop the loop
+		}
 	}
 
 	return \@pagesFound;
@@ -1764,6 +1785,34 @@ sub makeXMLrequest {
 #  return decode_recursive($xml);
 	return $xml;
 } # end makeXMLrequest
+
+######################################
+
+=item $api->makeUrlRequest($url, $args)
+=item $api->makeUrlRequest($url, ['name', 'Sean'])
+=item $api->makeUrlRequest($url, [ %queryParamsHash ])
+=item $api->makeUrlRequest($url, ['name', 'Sean', 'age', '27'])
+=item $api->makeUrlRequest("http://lyrics.wikia.com", [])
+
+Make a request to URL (don't need to set base_url or any of that).
+
+Arguments (query string parameters) are expected as an array of key => value
+pairs (eg ['make', 'toyota', 'model', 'camry'], or [ %someHash ]).
+
+=cut
+
+sub makeUrlRequest {
+	my $self = shift;
+	my $url = shift;
+	my $args = shift;
+
+	my $origBaseUrl = $self->base_url();
+	$self->base_url($url);
+	my $content = $self->makeHTTPrequest( $args );
+	$self->base_url($origBaseUrl);
+	
+	return $content;
+} # end makeUrlRequest()
 
 ######################################
 
