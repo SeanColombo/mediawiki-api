@@ -1619,8 +1619,8 @@ list.
 
 The number of results that can be fetched by this subroutine varies according
 to a few settings.  If "miser mode" is on, then there will be a limit to
-the number of items cached on that page.  In this case, wgQueryLimit is
-the upper bound (default appears to be 1000 if wgQueryLimit is not set).
+the number of items cached on that page.  In this case, wgQueryCacheLimit is
+the upper bound (default appears to be 1000 if wgQueryCacheLimit is not set).
 
 =cut
 
