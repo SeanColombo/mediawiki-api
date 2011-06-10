@@ -118,6 +118,34 @@ sub base_url () {
 
 ####################################
 
+=item $api->proxy("127.0.0.1", "8080"); # set proxy
+
+=item $proxyString = $api->proxy("127.0.0.1", "8080"); # set proxy and get resulting proxy URL (eg: "http://127.0.0.1:8080")
+
+=item $proxyString = $api->proxy(); # fetch current proxy string (eg: "http://127.0.0.1:8080")
+
+Set and/or fetch the proxy for the underlying LWP::UserAgent.  Expects two
+parameters: proxyHost and proxyPort.
+
+Returns the full-form of the proxy URL (eg: "http://127.0.0.1:8080").
+
+=cut
+
+sub proxy {
+	my $self = shift;
+	my $proxyHost = shift;
+	my $proxyPort = shift;
+	if(defined $proxyHost && defined $proxyPort){
+		my $proxyString = "http://".$proxyHost.":".$proxyPort;
+		$self->print(1, "A Setting proxy to: $proxyString");
+		$self->{'agent'}->proxy('http', $proxyString);
+	}
+
+	return $self->{'agent'}->proxy('http');
+} # end proxy()
+
+####################################
+
 =item $level = $api->max_retries($count)
 
 =item $level = $api->max_retries();
@@ -1670,6 +1698,10 @@ sub items_on_special {
 				if($numFound < $limit){
 					push(@pagesFound, $pageFound);
 					$numFound++;
+				} else {
+					# We've hit the limit, so stop looking for more results on this page or subsequent pages.
+					$fullPage = "";
+					$content = "";
 				}
 			}
 
