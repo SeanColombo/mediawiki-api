@@ -2022,19 +2022,23 @@ sub dump {
 # Internal function
 
 sub handleXMLerror { 
-  my $self = shift;
-  my $xml = shift;
-  my $text =  shift;
+	my $self = shift;
+	my $xml = shift;
+	my $text =  shift;
 
-  my $error = "XML error";
+	my $error = "XML error";
 
-  if ( defined $text) { 
-    $error = $error . ": " . $text;
-  }
+	if ( defined $text) { 
+		$error = $error . ": " . $text;
+	}
 
-  print Dumper($xml);
+	print Dumper($xml);
 
-  die "$error\n";
+	if($self->{'dieOnError'} != 0){
+		die "$error\n";
+	} else {
+		print "$error\n";
+	}
 }
 #######################################
 
