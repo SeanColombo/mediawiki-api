@@ -1,7 +1,5 @@
 # Mediawiki::API
 # A Perl library to access the Mediawiki API
-#
-# TODO: Go through and wrap (probably) all of the 'die's in a check for dieOnError
 
 package Mediawiki::API;
 
@@ -84,7 +82,7 @@ sub new {
 
   $self->{'logintries'} = 5;       # delay on login throttle
   
-  $self->{'dieOnError'} = 1;       # if this is 0, makeXmlRequest will just return instead of 'die'ing the whole script.
+  $self->{'dieOnError'} = 1;       # if this is 0, normal edits (eg: everything but login) will just print errors instead of 'die'ing the whole script.
 
   bless($self);
   return $self;
@@ -287,14 +285,9 @@ sub cmsort  {
 
 	if ( defined $order)  {
 		if ( ! ( $order eq 'sortkey' || $order eq 'timestamp') ) {
-			my $errMsg = "cmsort parameter must be 'timestamp' or 'sortkey', not '$order'.\n";
-			
+
 # TODO: EXTRACT THIS TO A SUBROUTINE!!
-			if($self->{'dieOnError'} != 0){
-				die $errMsg;
-			} else {
-				print $errMsg;
-			}
+			$self->error("cmsort parameter must be 'timestamp' or 'sortkey', not '$order'.\n");
 # TODO: EXTRACT THIS TO A SUBROUTINE!!
 		}
 
@@ -330,7 +323,7 @@ sub login {
  $tries--;
 
  if (  $tries == 0 ) {
-    die "Too many login attempts\n";
+    $self->error("Too many login attempts\n");
  }
 
  $self->print(1,"A Logging in");
@@ -384,7 +377,7 @@ sub login {
     } else {
        $self->print(5, "Login error\n");
       $self->print(5, Dumper($xml));
-      die( "Login error. Message was: '" . $xml->{'login'}->{'result'} . "'\n");
+      $self->error( "Login error. Message was: '" . $xml->{'login'}->{'result'} . "'\n");
     }
   }
 
@@ -487,7 +480,7 @@ sub edit_page {
   }
 
   # Now, the editToken might be equal to this (eg: when creating a page).
-  #if ( $editToken eq '+\\' ) { die "Bad edit token!\n"; }
+  #if ( $editToken eq '+\\' ) { $self->error("Bad edit token!\n"); }
   
   # If the bot flag isn't set, the edit won't be recorded as a bot
   # edit, so it won't be hidden even with hide-bots set.
@@ -612,7 +605,7 @@ sub delete_page {
     $deleteToken = $self->delete_token($pageTitle);
   }
 
-  if ( $deleteToken eq '+\\' ) { die "Bad delete token!\n"; }
+  if ( $deleteToken eq '+\\' ) { $self->error("Bad delete token!\n"); }
 
   my $query = 
       [ 'action' => 'delete',
@@ -713,7 +706,7 @@ sub protect_page {
     $protectToken = $self->protect_token($pageTitle);
   }
 
-  if ( $protectToken eq '+\\' ) { die "Bad protect token!\n"; }
+  if ( $protectToken eq '+\\' ) { $self->error("Bad protect token!\n"); }
 
 	# If protections weren't specified, add a default (edits and moves for sysops only).
 	if(! (grep $_ eq "protections", @{$params})){
@@ -1205,7 +1198,7 @@ sub content_section {
   my $section = shift;
 
   if ( ! ( $section =~ /^\d+$/ ) ) { 
-    die "Bad section: '$section'. Must be a nonnegative integer.\n";
+	$self->error("Bad section: '$section'. Must be a nonnegative integer.\n");
   }
 
   $self->print(1,"A Fetching content of $pageTitle");
@@ -1316,7 +1309,7 @@ sub rollback_page {
 	# specific login session, and the user to rollback.
     ($rollbackToken, $lastEditor) = $self->rollback_tokenAndEditor($pageTitle);
 
-	if ( $rollbackToken eq '+\\' ) { die "Bad rollback token!\n"; }
+	if ( $rollbackToken eq '+\\' ) { $self->error("Bad rollback token!\n"); }
 
 	my $query = 
 			[ 'action' => 'rollback',
@@ -1760,14 +1753,11 @@ sub makeXMLrequest {
   my $res;
   my $xml;
 
-  while (1) { 
+  while (1) {
     $retryCount++;
     if ( $retryCount > $self->{'xmlretrylimit'} ) {
-		if($self->{'dieOnError'} != 0){
-			die "Aborting: too many retries in getXMLrequest\n";
-		} else {
-			return $xml;
-		}
+		$self->error( "Aborting: too many retries in getXMLrequest\n" );
+		last;
     }
 
     $res = $self->makeHTTPrequest($args);
@@ -1922,7 +1912,7 @@ sub makeHTTPrequest {
       $errorString .= 
        "Final HTTP error code was " . $res->code() . " " . $res->message . "\n";
       $errorString .= "Aborting.\n";
-      die($errorString);
+      $self->error($errorString);
     }
   }
 
@@ -2041,11 +2031,7 @@ sub handleXMLerror {
 
 	print Dumper($xml);
 
-	if($self->{'dieOnError'} != 0){
-		die "$error\n";
-	} else {
-		print "$error\n";
-	}
+	$self->error( $error );
 }
 #######################################
 
@@ -2079,14 +2065,12 @@ sub decode_recursive {
     return $newdata;
   }
 
-  die "Bad value $data\n";
+  $self->error( "Bad value $data\n" );
 }
 
 
 
 #######################################################
-
-# Internal function
 
 sub is_bot { 
   my $self = shift;
@@ -2101,6 +2085,28 @@ sub is_bot {
 
   return ( $self->{'isbot'} eq 'true');
 }
+
+
+##############################################################
+# Internal function
+
+# If 'dieOnError' is true (non-zero), dies with the error message,
+# otherwise prints the error message.
+#
+# WARNING: This subroutine should NOT be used except for cases where a
+# paranoid bot-wrangler would actually want the execution to stop. By
+# default (for historical reasons) dieOnError is true, so this subroutine
+# will kill execution.
+sub error{
+	my $self = shift;
+	my $errMsg = shift;
+
+	if($self->{'dieOnError'} != 0){
+		die $errMsg;
+	} else {
+	    $self->print(1, "ERR: " . $errMsg);
+	}
+} # end error()
 
 
 ##############################################################
@@ -2127,7 +2133,9 @@ sub parse_xml {
 #    print "Code: $! \n";
 # not well-formed (invalid token)
     print Dumper($xmlString);
-	die;
+	if($self->{'dieOnError'} != 0){
+		die;
+	}
   }
 
   if ( $self->debug_xml() > 0) { 
@@ -2280,7 +2288,7 @@ if(!defined('htmlspecialchars_decode')){
 
 =head1 Copryright
 
-Copyright 2008-2010 by Carl Beckhorn, Sean Colombo.
+Copyright 2008-2011 by Carl Beckhorn, Sean Colombo.
 
 Released under GNU Public License (GPL) 2.0.
 	  
