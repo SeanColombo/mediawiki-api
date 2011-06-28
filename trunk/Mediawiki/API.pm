@@ -285,10 +285,7 @@ sub cmsort  {
 
 	if ( defined $order)  {
 		if ( ! ( $order eq 'sortkey' || $order eq 'timestamp') ) {
-
-# TODO: EXTRACT THIS TO A SUBROUTINE!!
 			$self->error("cmsort parameter must be 'timestamp' or 'sortkey', not '$order'.\n");
-# TODO: EXTRACT THIS TO A SUBROUTINE!!
 		}
 
 		$self->{'cmsort'} = $order;
@@ -1811,7 +1808,7 @@ sub makeXMLrequest {
     sleep $edelay;
   }
 
-#  return decode_recursive($xml);
+#  return $self->decode_recursive($xml);
 	return $xml;
 } # end makeXMLrequest
 
@@ -2038,6 +2035,7 @@ sub handleXMLerror {
 ### Recursively decode entities from the XML data structure
 
 sub decode_recursive {
+  my $self = shift;
   my $data = shift;
   my $newdata;
   my $i;
