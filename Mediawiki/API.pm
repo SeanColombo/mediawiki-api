@@ -282,20 +282,27 @@ or 'sortkey'.
 =cut
 
 sub cmsort  {
-  my $self = shift;
-  my $order = shift;
+	my $self = shift;
+	my $order = shift;
 
-  if ( defined $order)  {
+	if ( defined $order)  {
+		if ( ! ( $order eq 'sortkey' || $order eq 'timestamp') ) {
+			my $errMsg = "cmsort parameter must be 'timestamp' or 'sortkey', not '$order'.\n";
+			
+# TODO: EXTRACT THIS TO A SUBROUTINE!!
+			if($self->{'dieOnError'} != 0){
+				die $errMsg;
+			} else {
+				print $errMsg;
+			}
+# TODO: EXTRACT THIS TO A SUBROUTINE!!
+		}
 
-    if ( ! ( $order eq 'sortkey' || $order eq 'timestamp') ) { 
-      die "cmsort parameter must be 'timestamp' or 'sortkey', not '$order'.\n";
-    }
+		$self->{'cmsort'} = $order;
+		$self->print(1, "A Set category sort order to: $order");
+	}
 
-    $self->{'cmsort'} = $order;
-    $self->print(1, "A Set category sort order to: $order");
-  }
-
-  return $self->{'cmsort'};
+	return $self->{'cmsort'};
 }
 
 #############################################################
