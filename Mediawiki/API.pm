@@ -797,8 +797,8 @@ sub protect_token {
 
 =over
 
-=item $articles = 
-    $api->pages_in_category($categoryTitle [ , $namespace])
+=item $articlesRef = $api->pages_in_category($categoryTitle [ , $namespace])
+=item @articles = @{$api->pages_in_category($categoryTitle)};
 
 Fetch the list of page titles in a category. Optional numeric
 parameter to filter by namespace. Return $articles, an array ref.
@@ -809,8 +809,9 @@ sub pages_in_category {
   my $self = shift;
   my $categoryTitle = shift;
   my $namespace = shift;
-
-  my $results = $self->pages_in_category_detailed($categoryTitle,$namespace);
+  my $limit = shift;
+  
+  my $results = $self->pages_in_category_detailed($categoryTitle, $namespace, $limit);
 
   my @articles;
 
@@ -823,6 +824,55 @@ sub pages_in_category {
 }
 
 ############################################################
+
+=item $articles = 
+
+$api->pages_in_category_detailed($categoryTitle [, $namespace])
+
+Fetch the contents of a category. Optional parameter to select a  
+specific namespace. Returns a reference to an array of hash 
+references.
+
+=cut
+
+sub pages_in_category_detailed {
+	my $self = shift;
+	my $categoryTitle = shift;
+	my $namespace = shift;
+	my $limit = shift;
+
+	$self->print(1,"A Fetching category contents for $categoryTitle");
+
+	# Assure that the "Category:" prefix is on the title.
+	if ( $categoryTitle !~ /^Category:/) { 
+		$categoryTitle = 'Category:' . $categoryTitle;
+	}
+
+	my %queryParameters =  ( 'action' => 'query', 
+							'list' => 'categorymembers', 
+							'cmlimit' => $self->{'querylimit'},
+							'cmsort' => $self->{'cmsort'},
+							'cmprop' => 'ids|title|sortkey|timestamp',
+							'cmtitle' => $categoryTitle,
+							'format' => 'xml' );
+
+	if ( defined $namespace ) {
+		$queryParameters{'cmnamespace'} = $namespace;
+	}
+
+	if ( $self->is_bot) { $queryParameters{'cmlimit'} = $self->{'botlimit'}; }
+
+	my $results = $self->fetchWithContinuation(\%queryParameters, 
+				['query', 'categorymembers', 'cm'],   
+				'cm', 
+				['query-continue', 'categorymembers', 'cmcontinue'], 
+				'cmcontinue',
+				$limit);
+
+	return $results;
+}
+
+#############################################################
 # Compatibility function from old framework
 
 =item $articles = $api->fetch_backlinks_compat($pageTitle)
@@ -885,53 +935,6 @@ sub backlinks {
 }
 
 ################################################################
-
-=item $articles = 
-
-$api->pages_in_category_detailed($categoryTitle [, $namespace])
-
-Fetch the contents of a category. Optional parameter to select a  
-specific namespace. Returns a reference to an array of hash 
-references.
-
-=cut
-
-sub pages_in_category_detailed {
-	my $self = shift;
-	my $categoryTitle = shift;
-	my $namespace = shift;
-
-	$self->print(1,"A Fetching category contents for $categoryTitle");
-
-	# Assure that the "Category:" prefix is on the title.
-	if ( $categoryTitle !~ /^Category:/) { 
-		$categoryTitle = 'Category:' . $categoryTitle;
-	}
-
-	my %queryParameters =  ( 'action' => 'query', 
-							'list' => 'categorymembers', 
-							'cmlimit' => $self->{'querylimit'},
-							'cmsort' => $self->{'cmsort'},
-							'cmprop' => 'ids|title|sortkey|timestamp',
-							'cmtitle' => $categoryTitle,
-							'format' => 'xml' );
-
-	if ( defined $namespace ) {
-		$queryParameters{'cmnamespace'} = $namespace;
-	}
-
-	if ( $self->is_bot) { $queryParameters{'cmlimit'} = $self->{'botlimit'}; }
-
-	my $results = $self->fetchWithContinuation(\%queryParameters, 
-				['query', 'categorymembers', 'cm'],   
-				'cm', 
-				['query-continue', 'categorymembers', 'cmcontinue'], 
-				'cmcontinue');
-
-	return $results;
-}
-
-#############################################################
 
 =item $list = $api->where_embedded($templateName);
 
@@ -1362,35 +1365,42 @@ sub rollback_tokenAndEditor {
 # Internal Function
 
 sub fetchWithContinuation {
-  my $self = shift;
-  my $queryParameters = shift;
-  my $dataPath = shift;
-  my $dataName = shift;
-  my $continuationPath = shift;
-  my $continuationName = shift;
+	my $self = shift;
+	my $queryParameters = shift;
+	my $dataPath = shift;
+	my $dataName = shift;
+	my $continuationPath = shift;
+	my $continuationName = shift;
+	my $limit = shift; # optional
   
-  $self->add_maxlag_param($queryParameters);
+	$self->add_maxlag_param($queryParameters);
 
-  $self->print(5, "I Query parameters:\n" . Dumper($queryParameters));
+	$self->print(5, "I Query parameters:\n" . Dumper($queryParameters));
 
-  my $xml = $self->makeXMLrequest([ %{$queryParameters}], [$dataName]);
-  my @results = @{$self->child_data_if_defined($xml, $dataPath, [])};
+	my $xml = $self->makeXMLrequest([ %{$queryParameters}], [$dataName]);
+	my @results = @{$self->child_data_if_defined($xml, $dataPath, [])};
 
-#  $self->print(6, Dumper($xml));
+#	$self->print(6, Dumper($xml));
 
-  while ( defined $xml->{'query-continue'} ) { 
-    $self->print(5, "CONTINUE: " . Dumper($xml->{'query-continue'}));
+	while(( defined $xml->{'query-continue'} )
+		 && ((scalar(@results) < $limit) || (!defined($limit)))){ # if a limit is defined, use it to stop from making too many requests
+		$self->print(5, "CONTINUE: " . Dumper($xml->{'query-continue'}));
 
-    $queryParameters->{$continuationName} =     
-	encode("utf8",$self->child_data( $xml, $continuationPath,
-                                     "Error in categorymembers xml"));
-    $xml =$self->makeXMLrequest([ %{$queryParameters}], [$dataName]);
-    @results = (@results, 
-                @{$self->child_data_if_defined($xml, $dataPath, [])} );
+		$queryParameters->{$continuationName} = encode("utf8",$self->child_data( $xml, $continuationPath, "Error in categorymembers xml"));
+		$xml =$self->makeXMLrequest([ %{$queryParameters}], [$dataName]);
+	
+	
+		my $childData = $self->child_data_if_defined($xml, $dataPath, []);
+		if(ref($childData) eq 'ARRAY'){
+			@results = (@results, @{$childData} );
+		} else {
+			@results = (@results, $childData); # a single item was returned
+		}
+	}
 
-  }
+	# TODO: Should we remove the "extra" items from the last page if that page resulted in more than the limit?
 
-  return \@results;
+	return \@results;
 }
 
 #######################################################
@@ -1955,6 +1965,11 @@ sub child_data {
 # in the second parameter to get the final value. If at any point the
 # path is not defined as expected, then the default value (third parameter)
 # is returned.
+#
+# WARNING/NOTE: This subroutine chooses an appropriate type, so even if there
+# _may_ have been multiple results, if there is only one, then just that item
+# will be returned, rather than an array-reference. Make sure to check the
+# type of the result as in fetch_with_continuation.
 ####
 sub child_data_if_defined { 
   my $self = shift;
