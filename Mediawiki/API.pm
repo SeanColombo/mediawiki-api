@@ -897,43 +897,38 @@ references.
 =cut
 
 sub pages_in_category_detailed {
-  my $self = shift;
-  my $categoryTitle = shift;
-  my $namespace = shift;
+	my $self = shift;
+	my $categoryTitle = shift;
+	my $namespace = shift;
 
-  $self->print(1,"A Fetching category contents for $categoryTitle");
+	$self->print(1,"A Fetching category contents for $categoryTitle");
 
-### The behavior keeps changing with respect to whether 
-### the Category: prefix should be included.
-  if ( $categoryTitle =~ /^Category:/) { 
-#    $self->print(1,"WARNING: Don't pass categories with namespace included");
-#    $categoryTitle =~ s/^Category://;
-  } else { 
-    $categoryTitle = 'Category:' . $categoryTitle;
-  }
+	# Assure that the "Category:" prefix is on the title.
+	if ( $categoryTitle !~ /^Category:/) { 
+		$categoryTitle = 'Category:' . $categoryTitle;
+	}
 
-  my %queryParameters =  ( 'action' => 'query', 
-                           'list' => 'categorymembers', 
-                           'cmlimit' => $self->{'querylimit'},
-                           'cmsort' => $self->{'cmsort'},
-                           'cmprop' => 'ids|title|sortkey|timestamp',
-                           'cmtitle' => $categoryTitle,
-                           'format' => 'xml' );
+	my %queryParameters =  ( 'action' => 'query', 
+							'list' => 'categorymembers', 
+							'cmlimit' => $self->{'querylimit'},
+							'cmsort' => $self->{'cmsort'},
+							'cmprop' => 'ids|title|sortkey|timestamp',
+							'cmtitle' => $categoryTitle,
+							'format' => 'xml' );
 
-  if ( defined $namespace ) {
-    $queryParameters{'cmnamespace'} = $namespace;
-  }
+	if ( defined $namespace ) {
+		$queryParameters{'cmnamespace'} = $namespace;
+	}
 
-  if ( $self->is_bot) { $queryParameters{'cmlimit'} = $self->{'botlimit'}; }
+	if ( $self->is_bot) { $queryParameters{'cmlimit'} = $self->{'botlimit'}; }
 
-  my $results 
-    = $self->fetchWithContinuation(\%queryParameters, 
-                    ['query', 'categorymembers', 'cm'],   
-                    'cm', 
-                    ['query-continue', 'categorymembers', 'cmcontinue'], 
-                    'cmcontinue');
+	my $results = $self->fetchWithContinuation(\%queryParameters, 
+				['query', 'categorymembers', 'cm'],   
+				'cm', 
+				['query-continue', 'categorymembers', 'cmcontinue'], 
+				'cmcontinue');
 
-  return $results;
+	return $results;
 }
 
 #############################################################
