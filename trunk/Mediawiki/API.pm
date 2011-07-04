@@ -510,32 +510,34 @@ sub edit_page {
 # internal function
 
 sub edit_token {
-  my $self = shift;
-  my $pageTitle = shift;
+	my $self = shift;
+	my $pageTitle = shift;
 
-  my $xml  = $self->makeXMLrequest(
-                  [ 'action' => 'query', 
-                    'prop' => 'info',
-                    'titles' => $pageTitle,
-                    'intoken' => 'edit',
-                    'format' => 'xml']);
+	my $xml  = $self->makeXMLrequest(
+					[	'action' => 'query', 
+						'prop' => 'info',
+						'titles' => $pageTitle,
+						'intoken' => 'edit',
+						'format' => 'xml']);
 
-  if ( ! defined $xml->{'query'}
-       || ! defined $xml->{'query'}->{'pages'}
-       || ! defined $xml->{'query'}->{'pages'}->{'page'} 
-       || ! defined $xml->{'query'}->{'pages'}->{'page'}->{'edittoken'} ) { 
-     $self->handleXMLerror($xml);
-  }
+	my $editToken = "";
+	if ( ! defined $xml->{'query'}
+		|| ! defined $xml->{'query'}->{'pages'}
+		|| ! defined $xml->{'query'}->{'pages'}->{'page'} 
+		|| (ref($xml->{'query'}->{'pages'}->{'page'}) ne 'HASH')
+		|| ! defined $xml->{'query'}->{'pages'}->{'page'}->{'edittoken'} ) { 
+		$self->handleXMLerror($xml);
+	} else {
+		$editToken = $xml->{'query'}->{'pages'}->{'page'}->{'edittoken'};
+		$self->print(5, "R edit token: ... $editToken ...");
 
-  my $editToken = $xml->{'query'}->{'pages'}->{'page'}->{'edittoken'};
-  $self->print(5, "R edit token: ... $editToken ...");
+		if ( 1 == $self->{'cacheEditToken'} ) { 
+			$self->{'editToken'} = $editToken;
+			$self->print(5, "I caching edit token");  
+		}
+	}
 
-  if ( 1 == $self->{'cacheEditToken'} ) { 
-    $self->{'editToken'} = $editToken;
-    $self->print(5, "I caching edit token");  
-  }
-
-  return $editToken;
+	return $editToken;
 }
 
 ######################################################
@@ -1161,22 +1163,21 @@ sub content {
 ## Internal function
 
 sub content_single { 
-  my $self = shift;
-  my $pageTitle = shift;
+	my $self = shift;
+	my $pageTitle = shift;
 
-  $self->print(1,"A Fetching content of $pageTitle");
+	$self->print(1,"A Fetching content of $pageTitle");
  
-  my %queryParameters =  ( 'action' => 'query', 
-                           'prop' => 'revisions', 
-                           'titles' => $pageTitle,
-                           'rvprop' => 'content',
-                           'format' => 'xml' );
+	my %queryParameters =  ( 'action' => 'query', 
+							'prop' => 'revisions', 
+							'titles' => $pageTitle,
+							'rvprop' => 'content',
+							'format' => 'xml' );
 
-  my $results 
-    = $self->makeXMLrequest([%queryParameters]);
+	my $results = $self->makeXMLrequest([%queryParameters]);
 
-  return $self->child_data_if_defined($results, 
-                       ['query', 'pages', 'page', 'revisions', 'rev', 'content'], '');
+	return $self->child_data_if_defined($results, 
+					['query', 'pages', 'page', 'revisions', 'rev', 'content'], '');
 }
 #########################################################
 
@@ -1979,7 +1980,7 @@ sub child_data_if_defined {
 
   my $name;
   foreach $name ( @r) { 
-    if ( ! defined $p->{$name}) { 
+    if ((ref($p) ne 'HASH') || ( ! defined $p->{$name})) { 
         return $default;
     }
     $p = $p->{$name}
