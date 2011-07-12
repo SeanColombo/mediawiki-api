@@ -669,7 +669,7 @@ sub delete_token {
 Protect the page given by $pageTitle and provide the explanation
 that is given in $reason.
 
-This default to protects edits and moves to only be do-able for
+This defaults to protecting edits and moves to only be do-able for
 sysops and with no expiration.  This should be kept backward compatible.
 
 Pass in additional or different parameters to change the protections.
@@ -680,7 +680,7 @@ would let autoconfirmed users edit the page, but only allow sysops to move the p
 Cascading protection is NOT on (and there is currently no parameter
 for it in this subroutine).
 
-Returns undef on success. 
+Returns undef on success.
 Returns the API.php result hash on error.
 
 NOTE: If this returns "missingtitle-createonly", that means that you tried to protect/unprotect
