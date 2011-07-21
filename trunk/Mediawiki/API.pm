@@ -1378,8 +1378,12 @@ sub fetchWithContinuation {
 
 	$self->print(5, "I Query parameters:\n" . Dumper($queryParameters));
 
+	my @results = ();
 	my $xml = $self->makeXMLrequest([ %{$queryParameters}], [$dataName]);
-	my @results = @{$self->child_data_if_defined($xml, $dataPath, [])};
+	my $resultsRef = $self->child_data_if_defined($xml, $dataPath, []);
+	if(ref($resultsRef) eq 'ARRAY'){
+		@results = @{$resultsRef};
+	}
 
 #	$self->print(6, Dumper($xml));
 
