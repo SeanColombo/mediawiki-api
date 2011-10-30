@@ -428,6 +428,10 @@ sub login_from_file {
     die "No password to log in\n";
   }
 
+  # Carriage-returns slip through chomp and other whitespace checks.  This was causing Illegal names in login attempts if the login file has \r\n linebreaks in it.
+  $user =~ s/\r//g;
+  $pass =~ s/\r//g;
+
   $self->login($user, $pass);
 
 }
