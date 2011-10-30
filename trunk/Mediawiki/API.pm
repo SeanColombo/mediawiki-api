@@ -350,31 +350,34 @@ sub login {
       sleep (2 + $wait);
       return $self->login($userName, $userPassword, $tries);
     }  elsif ( $result eq 'NeedToken' ) {
-      my $oldxml = $xml;
-         $xml  = $self->makeXMLrequest(
-                      [ 'action' => 'login', 
-                        'format' => 'xml',
-                        'lgname' => $userName,
-                        'cookieprefix' => $oldxml->{'login'}->{'cookieprefix'},
-                        'sessionid' => $oldxml->{'login'}->{'sessionid'},
-                        'lguserid' => $oldxml->{'login'}->{'lguserid'},
-                        'lgtoken' => $oldxml->{'login'}->{'token'},
-                        'lgpassword' => $userPassword  ]);
+		my $oldxml = $xml;
+		$xml  = $self->makeXMLrequest(
+					[ 'action' => 'login', 
+					'format' => 'xml',
+					'lgname' => $userName,
+					'cookieprefix' => $oldxml->{'login'}->{'cookieprefix'},
+					'sessionid' => $oldxml->{'login'}->{'sessionid'},
+					'lguserid' => $oldxml->{'login'}->{'lguserid'},
+					'lgtoken' => $oldxml->{'login'}->{'token'},
+					'lgpassword' => $userPassword  ]);
 
        if ( ! defined $xml->{'login'}
          || ! defined $xml->{'login'}->{'result'}) {
-              $self->print(4, "E no login result.\n" . Dumper($xml));
-              $self->handleXMLerror("login err");
+			$self->print(4, "E no login result.\n" . Dumper($xml));
+			$self->handleXMLerror("login err");
         }
 
-        if ( $xml->{'login'}->{'result'} ne 'Success' ) {
-          $self->print(5, "Login error on second phase\n");
-          $self->print(5, Dumper($xml));
-       }
+		if ( $xml->{'login'}->{'result'} ne 'Success' ) {
+			$self->print(5, "Login error on second phase\n");
+			$self->print(5, Dumper($xml));
+			$self->error( "Login error. Message was: '" . $xml->{'login'}->{'result'} . "'\n");
+			$self->handleXMLerror("login err");
+		}
     } else {
-       $self->print(5, "Login error\n");
-      $self->print(5, Dumper($xml));
-      $self->error( "Login error. Message was: '" . $xml->{'login'}->{'result'} . "'\n");
+		$self->print(5, "Login error\n");
+		$self->print(5, Dumper($xml));
+		$self->error( "Login error. Message was: '" . $xml->{'login'}->{'result'} . "'\n");
+		$self->handleXMLerror("login err");
     }
   }
 
