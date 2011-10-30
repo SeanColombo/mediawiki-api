@@ -365,19 +365,21 @@ sub login {
          || ! defined $xml->{'login'}->{'result'}) {
 			$self->print(4, "E no login result.\n" . Dumper($xml));
 			$self->handleXMLerror("login err");
+			$self->error("No login result. Stopping.\n");
         }
 
 		if ( $xml->{'login'}->{'result'} ne 'Success' ) {
 			$self->print(5, "Login error on second phase\n");
 			$self->print(5, Dumper($xml));
 			$self->error( "Login error. Message was: '" . $xml->{'login'}->{'result'} . "'\n");
-			$self->handleXMLerror("login err");
+			$self->error("Unsuccessful login result.\n");
 		}
     } else {
 		$self->print(5, "Login error\n");
 		$self->print(5, Dumper($xml));
 		$self->error( "Login error. Message was: '" . $xml->{'login'}->{'result'} . "'\n");
 		$self->handleXMLerror("login err");
+		$self->error("Unsuccessful login result.\n");
     }
   }
 
