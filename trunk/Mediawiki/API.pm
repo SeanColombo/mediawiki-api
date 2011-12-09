@@ -551,6 +551,78 @@ sub edit_token {
 
 ######################################################
 
+=item $api->upload($fileNameOnWiki, $sourceFileOnComputer, $textOfFilePage, $editComment);
+
+ Uploads an image to the wiki.
+ 
+ First param is the filename which will be the name of the image on the wiki.
+ Second param is the source filename on your computer of the file to upload.
+ Third param is the text of the image's page (usually a description of the image and/or the source).
+ Fourth param is the comment to go along with the upload.
+
+ http://www.mediawiki.org/wiki/API:Upload
+ 
+ TODO: Add support for uploading by URL instead of local file. See 'wgAllowCopyUploads' info online.
+=cut
+sub upload{
+	my $self = shift;
+	my $pageTitle = shift;
+	my $sourceFile = shift;
+	my $text = shift;
+	my $comment = shift;
+	my $params = shift || [];
+
+	$self->print(1,"A Uploading \"$pageTitle\" from source-file \"$sourceFile\"");
+
+	my $editToken; 
+	# Get the edit-token in the same way as editing any other article.
+	{
+		if ( 1 == $self->{'cacheEditToken'} 
+			 && defined $self->{'editToken'} ) { 
+			$editToken = $self->{'editToken'};
+			$self->print(5, "I using cached edit token: $editToken");  
+		} else {
+			$editToken = $self->edit_token($pageTitle);
+		}
+
+		# Now, the editToken might be equal to this (eg: when creating a page).
+		#if ( $editToken eq '+\\' ) { $self->error("Bad edit token!\n"); }
+
+		# If the bot flag isn't set, the edit won't be recorded as a bot
+		# edit, so it won't be hidden even with hide-bots set.
+		if($self->{'setbotflag'} != 0){
+			push(@$params, 'bot'=>"1");
+		}
+	}
+
+	my $query = 
+		[ 'action' => 'upload',
+		'filename' => $pageTitle,
+		'text' => $text,
+		'comment' => $comment,
+		'token' => $editToken,
+		'ignorewarnings' => 1,
+		'format' => 'xml',
+		'content_type' => 'form-data',
+		'file' => ["$sourceFile"]
+		];
+
+	my $res  = $self->makeXMLrequest($query);
+
+	$self->print(5, 'R upload response: ' . Dumper($res));
+
+	if ( exists($res->{'upload'}->{'imageinfo'}) ) {
+		return "";
+	} else {
+		print "Error trying to upload image...\n";
+		print Dumper($res);
+		return $res;
+	}
+}
+
+
+######################################################
+
 =item $api->purge($pageTitles);
 
 Purge the cache of the pages given in the pageTitles
@@ -573,7 +645,7 @@ sub purge {
 
   my $res  = $self->makeXMLrequest($query);
 
-  $self->print(5, 'R deletion response: ' . Dumper($res));
+  $self->print(5, 'R purge response: ' . Dumper($res));
 
   if ( exists($res->{'purge'}->{'page'}->{'purged'}) ) { 
       return "";
@@ -1902,7 +1974,15 @@ sub makeHTTPrequest {
       $self->print(1,"A  Repeating request ($retryCount)");
     }
 
-    $res = $self->{'agent'}->post($self->{'baseurl'}, $args);
+	if($args->['action'] == "upload"){
+		$res = $self->{'agent'}->post($self->{'baseurl'},
+										Content_Type=>'form-data',
+										Content => $args
+									);
+	} else {
+		$res = $self->{'agent'}->post($self->{'baseurl'}, $args);
+	}
+
     last if $res->is_success();
 
 #    print Dumper($res);
@@ -2316,6 +2396,7 @@ Released under GNU Public License (GPL) 2.0.
 	  
 TODO:
 	- It appears that this framework does not follow 301-redirects yet.  Add that.
+	- Add "Accept-Encoding: gzip" if this isn't already sending that.
 
 =cut
 
