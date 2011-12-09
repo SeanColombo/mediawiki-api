@@ -1359,6 +1359,39 @@ sub page_info {
 
 ################################################################
 
+################################################################
+
+=item $info = $api->image_info($imagePage);
+
+Fetch information about an image. Returns a reference to a hash. 
+
+TODO: Currently only grabs URL. Should be made configurable to grab
+any subset of the info types.
+
+=cut
+
+sub image_info {
+  my $self = shift;
+  my $pageTitle = shift;
+
+  $self->print(1,"A Fetching image info for $pageTitle");
+
+  #my $what = 'timestamp|user|comment|url|size|sha1|mime|metadata'; # |archivename (archived images only)
+  my $what = 'url';
+
+  my %queryParameters =  ( 'action' => 'query', 
+                           'prop' => 'imageinfo',
+                           'iiprop' => $what,
+                           'titles' => $pageTitle,
+                           'format' => 'xml' );
+
+  my $results = $self->makeXMLrequest([%queryParameters]);
+
+  return $self->child_data($results,  ['query', 'pages', 'page']);
+}
+
+################################################################
+
 =item $api->rollback_page($pageTitle);
 
 =item $api->rollback_page( $pageTitle, ["summary" => "Bot detected that this page was vandalism."] );
