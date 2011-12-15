@@ -1862,7 +1862,7 @@ parameter of XML::Simple.
 
 =cut
 
-sub makeXMLrequest {  
+sub makeXMLrequest {
   my $self = shift;
   my $args = shift;
   my $arrayNames = shift;
@@ -1976,6 +1976,9 @@ use a more specific method.
 The $args parameter must be a reference to an array of KEY => VALUE 
 pairs. These are passed directly to the HTTP POST request.
 
+If the 'forceget' parameter is passed in as an argument and is nonzero,
+then that will force this function to use GET instead of POST.
+
 =cut
 
 sub makeHTTPrequest {
@@ -2007,12 +2010,37 @@ sub makeHTTPrequest {
       $self->print(1,"A  Repeating request ($retryCount)");
     }
 
-	if($args->['action'] == "upload"){
+	# Make a hash copy just so I can access it easily (there's probably a more Perly way to do this conversion).
+	my $index = 0;
+	my $prev = "";
+	my %argsHash = ();
+	foreach my $val (@{$args}){
+		if($index%2!=0){
+			$argsHash{$prev} = $val; # the previous value is the key for the current item
+		} else {
+			$prev = $val;
+		}
+		$index++;
+	}
+
+	# Make the request
+	if($argsHash{'action'} eq "upload"){
+		# Special format for sending files.
 		$res = $self->{'agent'}->post($self->{'baseurl'},
 										Content_Type=>'form-data',
 										Content => $args
 									);
+	} elsif(exists($argsHash{'forceget'}) && ($argsHash{'forceget'} != 0)){
+		# Allow some functions to force a GET
+		my $url = $self->{'baseurl'} . "?";
+		foreach my $key (keys(%argsHash)){
+			if($key ne "forceget"){
+				$url .= "$key=".$argsHash{$key}."&";
+			}
+		}
+		$res = $self->{'agent'}->get($url);
 	} else {
+		# This is used in most cases.
 		$res = $self->{'agent'}->post($self->{'baseurl'}, $args);
 	}
 
