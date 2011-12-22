@@ -908,9 +908,7 @@ sub pages_in_category {
 
 ############################################################
 
-=item $articles = 
-
-$api->pages_in_category_detailed($categoryTitle [, $namespace])
+=item $articles = $api->pages_in_category_detailed($categoryTitle [, $namespace])
 
 Fetch the contents of a category. Optional parameter to select a  
 specific namespace. Returns a reference to an array of hash 
@@ -1392,6 +1390,45 @@ sub image_info {
 
 ################################################################
 
+=item $imageData = $api->allimages($limit);
+
+Fetch a list of images up to $limit.
+
+Docs:
+http://www.mediawiki.org/wiki/API:Allimages
+Example link:
+http://lyrics.wikia.com/api.php?action=query&list=allimages&ailimit=100&aiprop=dimensions%7Cmime
+
+=cut
+
+sub allimages { 
+	my $self = shift;
+	my $limit = shift;
+
+	$self->print(1,"A Fetching list of all images up to limit $limit");
+
+	my %queryParameters =  ( 'action' => 'query', 
+							'list' => 'allimages',
+							'ailimit' => $self->{'querylimit'},
+							'aiprop' => "dimensions|mime",
+							'format' => 'xml' );
+
+	if ( $self->is_bot) { 
+		$queryParameters{'ailimit'} = $self->{'botlimit'};
+	}
+
+	my $results = $self->fetchWithContinuation(\%queryParameters, 
+						['query', 'allimages', 'img'],
+						'img',
+						['query-continue', 'allimages', 'aifrom'],
+						'aifrom',
+						$limit);
+
+	return $results;
+}
+
+################################################################
+
 =item $api->rollback_page($pageTitle);
 
 =item $api->rollback_page( $pageTitle, ["summary" => "Bot detected that this page was vandalism."] );
@@ -1501,13 +1538,16 @@ sub fetchWithContinuation {
 
 #	$self->print(6, Dumper($xml));
 
+	my $numResults = scalar(@results);
+	if($numResults == 1){
+		$numResults = keys(%{$results[0]}); # sometimes the result is an array holding a giant hashref
+	}
 	while(( defined $xml->{'query-continue'} )
-		 && ((scalar(@results) < $limit) || (!defined($limit)))){ # if a limit is defined, use it to stop from making too many requests
+		 && (($numResults < $limit) || (!defined($limit)))){ # if a limit is defined, use it to stop from making too many requests
 		$self->print(5, "CONTINUE: " . Dumper($xml->{'query-continue'}));
 
 		$queryParameters->{$continuationName} = encode("utf8",$self->child_data( $xml, $continuationPath, "Error in categorymembers xml"));
 		$xml =$self->makeXMLrequest([ %{$queryParameters}], [$dataName]);
-	
 	
 		my $childData = $self->child_data_if_defined($xml, $dataPath, []);
 		if(ref($childData) eq 'ARRAY'){
@@ -1515,7 +1555,13 @@ sub fetchWithContinuation {
 		} else {
 			@results = (@results, $childData); # a single item was returned
 		}
+
+		$numResults = scalar(@results);
+		if($numResults == 1){
+			$numResults = keys(%{$results[0]}); # sometimes the result is an array holding a giant hashref
+		}
 	}
+
 
 	# TODO: Should we remove the "extra" items from the last page if that page resulted in more than the limit?
 
