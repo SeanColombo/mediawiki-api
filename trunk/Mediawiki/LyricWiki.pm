@@ -8,8 +8,8 @@ use base qw(Mediawiki::API);
 use Data::Dumper;
 
 ##### CONFIGURATION #####
-#my $LYRICWIKI_BASE_URL = "http://lyrics.wikia.com/api.php";
-my $LYRICWIKI_BASE_URL = "http://lyrics.sean.wikia-dev.com/api.php";
+my $LYRICWIKI_BASE_URL = "http://lyrics.wikia.com/api.php";
+#my $LYRICWIKI_BASE_URL = "http://lyrics.sean.wikia-dev.com/api.php";
 ##### CONFIGURATION #####
 
 =pod
@@ -88,9 +88,7 @@ sub getSong{
 
 =item $api->getArtist("Cake");
 
-####
-# Returns info for an artist.
-####
+Returns info for an artist.
 
 =cut
 sub getArtist{
@@ -117,9 +115,7 @@ sub getArtist{
 
 =item $api->getHometown("Mac Miller");
 
-####
-# Returns the hometown for an artist.
-####
+Returns the hometown for an artist.
 
 =cut
 sub getHometown{
@@ -145,9 +141,7 @@ sub getHometown{
 
 =item $api->getSOTD();
 
-####
-# Returns info for the current Song of the Day.
-#####
+Returns info for the current Song of the Day.
 
 =cut
 sub getSOTD{
@@ -166,6 +160,32 @@ sub getSOTD{
 
 	return $results;
 } # end getSOTD()
+
+#############################################################
+
+=item $api->getTopSongs();
+
+Returns information about the currently most-popular songs.
+
+The result is an array, each element of which is a hash-ref containing
+key-value pairs of the results.
+
+=cut
+sub getTopSongs{
+	my $self = shift;
+
+	$self->print(1,"A Fetching LyricWiki Top Songs");
+ 
+	my $queryParams = [
+		'forceget' => '1', # the LW API appears to expect GET data only (for GET requests).
+		'action' => 'lyrics', 
+		'func' => 'getTopSongs', 
+		'fmt' => 'xml',
+		];
+
+	my $results = $self->makeXMLrequest($queryParams);
+	return $results->{'topSong'};
+} # end getTopSongs()
 
 #############################################################
 
