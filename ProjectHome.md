@@ -1,0 +1,1 @@
+This is a Perl library to access the Mediawiki API. It can be used by bots and other automated processes to access the Wikipedia wikis or other Mediawiki installations that have enabled the API.
